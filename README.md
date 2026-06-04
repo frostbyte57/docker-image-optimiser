@@ -9,7 +9,7 @@ Dockerfile anti-patterns — and, eventually, fixing them and proving the win.
 |---------|--------------|-------|
 | `dio lint`    | Parse a Dockerfile and report size / build-speed issues | ✅ working |
 | `dio fix`     | Rewrite safe issues in place, annotate the rest         | ✅ working |
-| `dio bench`   | Build before/after and compare size + build time        | 🚧 planned |
+| `dio bench`   | Build before/after and compare size + build time        | ✅ working |
 | `dio inspect` | Show per-layer sizes and wasted space for an image      | 🚧 planned |
 
 ## Quick start
@@ -18,6 +18,7 @@ Dockerfile anti-patterns — and, eventually, fixing them and proving the win.
 go run ./cmd/dio lint testdata/Dockerfile.bad   # report issues
 go run ./cmd/dio fix  testdata/Dockerfile.bad    # print a fixed Dockerfile
 go run ./cmd/dio fix -w Dockerfile               # rewrite in place
+go run ./cmd/dio bench Dockerfile                # build both, compare size + time (needs Docker)
 # or build a binary:
 go build -o dio ./cmd/dio && ./dio lint Dockerfile
 ```
@@ -26,6 +27,10 @@ go build -o dio ./cmd/dio && ./dio lint Dockerfile
 `fix` applies the safe, deterministic fixes (DIO002/003/004) directly and leaves
 a `# dio[...]` comment above issues that need a human decision (DIO001 reorder,
 DIO005 version pin). Re-running `fix` is idempotent.
+
+`bench` builds the original and the rewritten Dockerfile (with `--no-cache` by
+default for a fair comparison) and prints a size/time table. It needs a running
+Docker daemon and cleans up its images afterwards (`--keep` to retain them).
 
 ## Lint rules
 
@@ -42,10 +47,11 @@ DIO005 version pin). Re-running `fix` is idempotent.
 ```
 cmd/dio/            CLI entrypoint
 internal/
-  cli/              cobra command tree (lint, fix + stubs for bench/inspect)
+  cli/              cobra command tree (lint, fix, bench + inspect stub)
   parser/           Dockerfile -> []Instruction
   rules/            one file per lint rule; register in registry.go
   rewrite/          applies fixes: rewrites safe issues, annotates the rest
+  build/            shells out to Docker to build + measure images (bench)
   report/           terminal output
 testdata/           sample Dockerfiles
 ```
