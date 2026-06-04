@@ -10,7 +10,7 @@ Dockerfile anti-patterns — and, eventually, fixing them and proving the win.
 | `dio lint`    | Parse a Dockerfile and report size / build-speed issues | ✅ working |
 | `dio fix`     | Rewrite safe issues in place, annotate the rest         | ✅ working |
 | `dio bench`   | Build before/after and compare size + build time        | ✅ working |
-| `dio inspect` | Show per-layer sizes and wasted space for an image      | 🚧 planned |
+| `dio inspect` | Show per-layer sizes for an image, largest first         | ✅ working |
 
 ## Quick start
 
@@ -19,6 +19,7 @@ go run ./cmd/dio lint testdata/Dockerfile.bad   # report issues
 go run ./cmd/dio fix  testdata/Dockerfile.bad    # print a fixed Dockerfile
 go run ./cmd/dio fix -w Dockerfile               # rewrite in place
 go run ./cmd/dio bench Dockerfile                # build both, compare size + time (needs Docker)
+go run ./cmd/dio inspect myimage:latest          # per-layer size breakdown (needs Docker)
 # or build a binary:
 go build -o dio ./cmd/dio && ./dio lint Dockerfile
 ```
@@ -31,6 +32,9 @@ DIO005 version pin). Re-running `fix` is idempotent.
 `bench` builds the original and the rewritten Dockerfile (with `--no-cache` by
 default for a fair comparison) and prints a size/time table. It needs a running
 Docker daemon and cleans up its images afterwards (`--keep` to retain them).
+
+`inspect <image>` lists the image's layers largest-first with each layer's share
+of the total, so you can see where the bytes went (`-n N` to show only the top N).
 
 ## Lint rules
 
@@ -47,11 +51,12 @@ Docker daemon and cleans up its images afterwards (`--keep` to retain them).
 ```
 cmd/dio/            CLI entrypoint
 internal/
-  cli/              cobra command tree (lint, fix, bench + inspect stub)
+  cli/              cobra command tree (lint, fix, bench, inspect)
   parser/           Dockerfile -> []Instruction
   rules/            one file per lint rule; register in registry.go
   rewrite/          applies fixes: rewrites safe issues, annotates the rest
   build/            shells out to Docker to build + measure images (bench)
+  inspect/          per-layer size breakdown via `docker history`
   report/           terminal output
 testdata/           sample Dockerfiles
 ```
