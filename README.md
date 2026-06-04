@@ -8,19 +8,24 @@ Dockerfile anti-patterns — and, eventually, fixing them and proving the win.
 | Command | What it does | State |
 |---------|--------------|-------|
 | `dio lint`    | Parse a Dockerfile and report size / build-speed issues | ✅ working |
-| `dio fix`     | Rewrite the Dockerfile applying the fixes               | 🚧 planned |
+| `dio fix`     | Rewrite safe issues in place, annotate the rest         | ✅ working |
 | `dio bench`   | Build before/after and compare size + build time        | 🚧 planned |
 | `dio inspect` | Show per-layer sizes and wasted space for an image      | 🚧 planned |
 
 ## Quick start
 
 ```bash
-go run ./cmd/dio lint testdata/Dockerfile.bad
+go run ./cmd/dio lint testdata/Dockerfile.bad   # report issues
+go run ./cmd/dio fix  testdata/Dockerfile.bad    # print a fixed Dockerfile
+go run ./cmd/dio fix -w Dockerfile               # rewrite in place
 # or build a binary:
 go build -o dio ./cmd/dio && ./dio lint Dockerfile
 ```
 
 `lint` exits non-zero when it finds issues, so it can gate a CI pipeline.
+`fix` applies the safe, deterministic fixes (DIO002/003/004) directly and leaves
+a `# dio[...]` comment above issues that need a human decision (DIO001 reorder,
+DIO005 version pin). Re-running `fix` is idempotent.
 
 ## Lint rules
 
@@ -37,9 +42,10 @@ go build -o dio ./cmd/dio && ./dio lint Dockerfile
 ```
 cmd/dio/            CLI entrypoint
 internal/
-  cli/              cobra command tree (lint + stubs for fix/bench/inspect)
+  cli/              cobra command tree (lint, fix + stubs for bench/inspect)
   parser/           Dockerfile -> []Instruction
   rules/            one file per lint rule; register in registry.go
+  rewrite/          applies fixes: rewrites safe issues, annotates the rest
   report/           terminal output
 testdata/           sample Dockerfiles
 ```

@@ -16,7 +16,8 @@ type Instruction struct {
 	Cmd       string // upper-cased command, e.g. "RUN", "COPY", "FROM"
 	Args      string // everything after the command, continuations joined
 	StartLine int    // 1-based line where the instruction begins
-	Raw       string // the original source, including continuations
+	EndLine   int    // 1-based line where the instruction ends (== StartLine if single-line)
+	Raw       string // the original source as a single line, continuations joined
 }
 
 // Parse reads a Dockerfile and returns its instructions in order.
@@ -30,7 +31,7 @@ func Parse(r io.Reader) ([]Instruction, error) {
 	)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
-	flush := func() {
+	flush := func(endAt int) {
 		raw := pending.String()
 		pending.Reset()
 		if strings.TrimSpace(raw) == "" {
@@ -41,6 +42,7 @@ func Parse(r io.Reader) ([]Instruction, error) {
 			Cmd:       strings.ToUpper(cmd),
 			Args:      strings.TrimSpace(args),
 			StartLine: startAt,
+			EndLine:   endAt,
 			Raw:       raw,
 		})
 	}
@@ -69,11 +71,11 @@ func Parse(r io.Reader) ([]Instruction, error) {
 		}
 
 		pending.WriteString(line)
-		flush()
+		flush(lineNo)
 	}
 	if err := sc.Err(); err != nil {
 		return nil, err
 	}
-	flush() // file ending mid-continuation
+	flush(lineNo) // file ending mid-continuation
 	return out, nil
 }
