@@ -1,0 +1,11 @@
+# A deliberately unoptimised Dockerfile for trying out `dio lint`.
+FROM node:latest
+
+COPY . .
+RUN npm install
+
+RUN apt-get update && apt-get install -y curl
+
+RUN pip install requests
+
+CMD ["node", "server.js"]

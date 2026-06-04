@@ -1,0 +1,7 @@
+# Binaries
+/dio
+/bin/
+
+# Go
+*.test
+*.out
