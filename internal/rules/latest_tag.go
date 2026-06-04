@@ -12,7 +12,7 @@ type latestTag struct{}
 
 func (latestTag) ID() string { return "DIO005" }
 
-func (r latestTag) Check(ins []parser.Instruction) []Finding {
+func (r latestTag) Check(ins []parser.Instruction, _ Options) []Finding {
 	var findings []Finding
 	for _, in := range ins {
 		if in.Cmd != "FROM" {

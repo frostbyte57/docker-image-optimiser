@@ -14,9 +14,10 @@ import (
 
 // Result captures one image build.
 type Result struct {
-	Tag      string
-	Duration time.Duration
-	Size     int64 // bytes
+	Tag         string
+	Duration    time.Duration // cold build wall-clock
+	Size        int64         // bytes
+	WarmRebuild time.Duration // rebuild time after a source change (0 if not measured)
 }
 
 // Available reports whether the docker CLI is installed and its daemon is

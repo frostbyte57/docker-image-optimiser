@@ -8,15 +8,17 @@ import (
 
 	"github.com/yuxiangchang/docker-image-optimiser/internal/build"
 	"github.com/yuxiangchang/docker-image-optimiser/internal/rewrite"
+	"github.com/yuxiangchang/docker-image-optimiser/internal/rules"
 )
 
 // newBenchCmd implements `dio bench`: build the original Dockerfile and its
 // auto-fixed rewrite, then report the size and build-time difference.
 func newBenchCmd() *cobra.Command {
 	var (
-		contextDir string
-		keep       bool
-		cache      bool
+		contextDir  string
+		keep        bool
+		cache       bool
+		incremental bool
 	)
 
 	cmd := &cobra.Command{
@@ -37,7 +39,7 @@ func newBenchCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := rewrite.Apply(src)
+			res, err := rewrite.Apply(src, rules.Options{})
 			if err != nil {
 				return err
 			}
@@ -75,6 +77,16 @@ func newBenchCmd() *cobra.Command {
 				return err
 			}
 
+			if incremental {
+				fmt.Fprintln(out, "measuring warm rebuilds (this builds each twice)...")
+				if before.WarmRebuild, err = build.WarmRebuild(contextDir, path, beforeTag); err != nil {
+					return err
+				}
+				if after.WarmRebuild, err = build.WarmRebuild(contextDir, fixed.Name(), afterTag); err != nil {
+					return err
+				}
+			}
+
 			fmt.Fprint(cmd.OutOrStdout(), build.Compare(before, after))
 			return nil
 		},
@@ -83,5 +95,6 @@ func newBenchCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&contextDir, "context", "c", ".", "build context directory")
 	cmd.Flags().BoolVar(&keep, "keep", false, "keep the built images instead of removing them")
 	cmd.Flags().BoolVar(&cache, "cache", false, "allow the build cache (default: --no-cache for a fair comparison)")
+	cmd.Flags().BoolVar(&incremental, "incremental", false, "also measure warm rebuild time after a source change")
 	return cmd
 }

@@ -41,10 +41,10 @@ func TestParseSize(t *testing.T) {
 
 func TestCleanCmd(t *testing.T) {
 	cases := map[string]string{
-		"/bin/sh -c #(nop)  CMD [\"node\"]":             `CMD ["node"]`,
-		"/bin/sh -c apt-get update":                     "apt-get update",
-		"RUN /bin/sh -c pip install x # buildkit":       "RUN /bin/sh -c pip install x",
-		"COPY dir:abc /app # buildkit":                  "COPY dir:abc /app",
+		"/bin/sh -c #(nop)  CMD [\"node\"]":       `CMD ["node"]`,
+		"/bin/sh -c apt-get update":               "apt-get update",
+		"RUN /bin/sh -c pip install x # buildkit": "RUN /bin/sh -c pip install x",
+		"COPY dir:abc /app # buildkit":            "COPY dir:abc /app",
 	}
 	for in, want := range cases {
 		if got := cleanCmd(in); got != want {

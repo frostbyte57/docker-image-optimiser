@@ -3,50 +3,57 @@ package rules
 import (
 	"strings"
 
+	"github.com/yuxiangchang/docker-image-optimiser/internal/ecosystem"
 	"github.com/yuxiangchang/docker-image-optimiser/internal/parser"
 )
 
-// copyBeforeInstall flags a broad `COPY . .` that appears before a dependency
-// install in the same stage. That ordering busts the build cache on every
-// source change, forcing a full reinstall. Copy manifests first instead.
+// copyBeforeInstall (DIO001) flags a broad `COPY . .` that appears before a
+// language dependency install in the same stage. That ordering busts the build
+// cache on every source change, forcing a full reinstall. The fix is to copy
+// the manifest files first, install, then copy the rest — which is structural,
+// so this is annotate-only.
 type copyBeforeInstall struct{}
 
 func (copyBeforeInstall) ID() string { return "DIO001" }
 
-// installMarkers indicate a dependency install that reads from copied manifest
-// files, so it benefits from copying those manifests before the rest of the
-// source. System package managers (apt/apk) install from remote repos and are
-// deliberately excluded.
-var installMarkers = []string{
-	"npm install", "npm ci", "yarn install", "pnpm install",
-	"pip install", "poetry install",
-	"go mod download", "bundle install", "composer install",
-}
-
-func (r copyBeforeInstall) Check(ins []parser.Instruction) []Finding {
+func (r copyBeforeInstall) Check(ins []parser.Instruction, _ Options) []Finding {
 	var findings []Finding
 	for i, in := range ins {
 		if in.Cmd != "COPY" || !isBroadCopy(in.Args) {
 			continue
 		}
-		// Does a dependency install follow, before the stage ends?
+		// Does a language dependency install follow, before the stage ends?
 		for _, later := range ins[i+1:] {
 			if later.Cmd == "FROM" {
 				break
 			}
-			if later.Cmd == "RUN" && containsAny(later.Args, installMarkers) {
-				findings = append(findings, Finding{
-					Rule:     r.ID(),
-					Severity: Warning,
-					Line:     in.StartLine,
-					Message:  "`COPY . .` before installing dependencies busts the cache on every source change",
-					Fix:      "Copy dependency manifests first (e.g. COPY package*.json ./), run the install, then COPY the rest",
-				})
-				break
+			if later.Cmd != "RUN" {
+				continue
 			}
+			eco, ok := ecosystem.ForCommand(later.Args)
+			if !ok || eco.Kind != ecosystem.Language {
+				continue
+			}
+			hint := "Copy " + manifestHint(eco) + " first, run the install, then COPY the rest"
+			findings = append(findings, Finding{
+				Rule:     r.ID(),
+				Severity: Warning,
+				Line:     in.StartLine,
+				Message:  "`COPY . .` before the " + eco.Name + " install busts the cache on every source change",
+				Fix:      hint,
+			})
+			break
 		}
 	}
 	return findings
+}
+
+// manifestHint renders an ecosystem's manifest files for a suggestion.
+func manifestHint(e ecosystem.Ecosystem) string {
+	if len(e.Manifests) == 0 {
+		return "the dependency manifest"
+	}
+	return strings.Join(e.Manifests, " and ")
 }
 
 // isBroadCopy reports whether a COPY pulls in the whole build context. Only the
@@ -66,15 +73,6 @@ func isBroadCopy(args string) bool {
 	}
 	for _, src := range srcs[:len(srcs)-1] { // drop destination
 		if src == "." || src == "./" {
-			return true
-		}
-	}
-	return false
-}
-
-func containsAny(s string, subs []string) bool {
-	for _, sub := range subs {
-		if strings.Contains(s, sub) {
 			return true
 		}
 	}

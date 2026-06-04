@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 
@@ -13,7 +14,9 @@ import (
 
 // newLintCmd implements `dio lint <Dockerfile>`: parse, run rules, report.
 func newLintCmd() *cobra.Command {
-	return &cobra.Command{
+	var contextDir string
+
+	cmd := &cobra.Command{
 		Use:   "lint [Dockerfile]",
 		Short: "Report size and build-speed anti-patterns in a Dockerfile",
 		Args:  cobra.MaximumNArgs(1),
@@ -23,18 +26,20 @@ func newLintCmd() *cobra.Command {
 				path = args[0]
 			}
 
-			f, err := os.Open(path)
+			src, err := os.ReadFile(path)
 			if err != nil {
 				return err
 			}
-			defer f.Close()
 
-			ins, err := parser.Parse(f)
+			ins, err := parser.Parse(bytes.NewReader(src))
 			if err != nil {
 				return fmt.Errorf("parsing %s: %w", path, err)
 			}
 
-			findings := rules.Run(ins)
+			findings := rules.Run(ins, rules.Options{
+				ContextDir: contextDir,
+				Source:     string(src),
+			})
 			n := report.Text(cmd.OutOrStdout(), path, findings)
 
 			// Non-zero exit on findings, so CI can gate on it.
@@ -44,4 +49,7 @@ func newLintCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().StringVarP(&contextDir, "context", "c", ".", "build context dir (enables the .dockerignore check)")
+	return cmd
 }

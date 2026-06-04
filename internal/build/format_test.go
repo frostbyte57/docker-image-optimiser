@@ -8,8 +8,8 @@ import (
 
 func TestHumanBytes(t *testing.T) {
 	cases := map[int64]string{
-		512:        "512 B",
-		1500:       "1.5 kB",
+		512:         "512 B",
+		1500:        "1.5 kB",
 		142_600_000: "142.6 MB",
 	}
 	for in, want := range cases {

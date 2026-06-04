@@ -1,9 +1,9 @@
 // Package rewrite applies lint fixes to a Dockerfile.
 //
 // It reuses the rules engine to find issues, then either rewrites the offending
-// instruction in place (for deterministic, safe fixes) or leaves an annotated
-// `# dio[...]` comment above it (for fixes that need human judgement, such as
-// reordering layers or choosing a version tag).
+// instruction in place (when the finding carries a Rewrite func) or leaves an
+// annotated `# dio[...]` comment above it (for fixes that need human judgement,
+// such as reordering layers, choosing a version tag, or going multi-stage).
 package rewrite
 
 import (
@@ -15,20 +15,6 @@ import (
 	"github.com/yuxiangchang/docker-image-optimiser/internal/rules"
 )
 
-// autoFixable maps a rule id to the transform that rewrites an instruction's
-// raw text. Rules absent here are handled with an annotation instead.
-var autoFixable = map[string]func(raw string) string{
-	"DIO002": func(raw string) string {
-		return strings.Replace(raw, "apt-get install", "apt-get install --no-install-recommends", 1)
-	},
-	"DIO003": func(raw string) string {
-		return strings.TrimRight(raw, " ") + " && rm -rf /var/lib/apt/lists/*"
-	},
-	"DIO004": func(raw string) string {
-		return strings.Replace(raw, "pip install", "pip install --no-cache-dir", 1)
-	},
-}
-
 // Result holds the rewritten file and a human-readable change log.
 type Result struct {
 	Content string   // the rewritten Dockerfile
@@ -37,8 +23,15 @@ type Result struct {
 	Changed bool
 }
 
-// Apply rewrites src and returns the result.
-func Apply(src []byte) (Result, error) {
+const syntaxDirective = "# syntax=docker/dockerfile:1"
+
+// Apply rewrites src and returns the result. opts is threaded to the rules
+// (e.g. opts.Conservative selects --no-cache-dir-style fixes over cache mounts).
+func Apply(src []byte, opts rules.Options) (Result, error) {
+	if opts.Source == "" {
+		opts.Source = string(src)
+	}
+
 	ins, err := parser.Parse(bytes.NewReader(src))
 	if err != nil {
 		return Result{}, err
@@ -51,21 +44,26 @@ func Apply(src []byte) (Result, error) {
 
 	var (
 		res      Result
-		fixedRaw = map[int]string{}      // startLine -> rewritten instruction
-		comments = map[int][]string{}    // startLine -> annotations to prepend
+		fixedRaw = map[int]string{}   // startLine -> rewritten instruction
+		comments = map[int][]string{} // startLine -> annotations to prepend
 	)
 
 	lines := strings.Split(string(src), "\n")
 
-	for _, f := range rules.Run(ins) {
-		if fix, ok := autoFixable[f.Rule]; ok {
+	for _, f := range rules.Run(ins, opts) {
+		switch {
+		case f.Rewrite != nil && f.Line > 0:
 			raw := fixedRaw[f.Line]
 			if raw == "" {
 				raw = startIndex[f.Line].Raw
 			}
-			fixedRaw[f.Line] = fix(raw)
+			fixedRaw[f.Line] = f.Rewrite(raw)
 			res.Applied = append(res.Applied, summary(f))
-		} else {
+		case f.Line == 0:
+			// File-level finding (e.g. missing syntax directive / .dockerignore);
+			// handled out of band below or surfaced as a note.
+			res.Manual = append(res.Manual, summary(f))
+		default:
 			note := "# dio[" + f.Rule + "]: " + f.Fix
 			if alreadyAnnotated(lines, f.Line, note) {
 				continue // keep fix idempotent across repeated runs
@@ -74,6 +72,7 @@ func Apply(src []byte) (Result, error) {
 			res.Manual = append(res.Manual, summary(f))
 		}
 	}
+
 	var out []string
 	for n := 1; n <= len(lines); {
 		in, isStart := startIndex[n]
@@ -91,16 +90,37 @@ func Apply(src []byte) (Result, error) {
 		n = in.EndLine + 1
 	}
 
-	res.Content = strings.Join(out, "\n")
+	content := strings.Join(out, "\n")
+	content = ensureSyntaxDirective(content)
+
+	res.Content = content
 	res.Changed = res.Content != string(src)
 	return res, nil
 }
 
-// alreadyAnnotated reports whether the line just above startLine is the given
-// annotation, so repeated `dio fix` runs don't stack duplicate comments.
+// ensureSyntaxDirective prepends the BuildKit syntax directive when the file
+// uses cache mounts but lacks it, so injected mounts work on older Docker.
+func ensureSyntaxDirective(content string) string {
+	if !strings.Contains(content, "--mount=type=cache") || rules.HasSyntaxDirective(content) {
+		return content
+	}
+	return syntaxDirective + "\n" + content
+}
+
+// alreadyAnnotated reports whether the given annotation already appears in the
+// contiguous block of `# dio[...]` comments directly above startLine, so repeated
+// `dio fix` runs don't stack duplicates (one instruction may carry several).
 func alreadyAnnotated(lines []string, startLine int, note string) bool {
-	above := startLine - 1 // 1-based line above the instruction
-	return above >= 1 && above <= len(lines) && strings.TrimSpace(lines[above-1]) == note
+	for i := startLine - 2; i >= 0 && i < len(lines); i-- { // 0-based, walking up
+		t := strings.TrimSpace(lines[i])
+		if t == note {
+			return true
+		}
+		if !strings.HasPrefix(t, "# dio[") {
+			break // stop at the first non-annotation line
+		}
+	}
+	return false
 }
 
 func summary(f rules.Finding) string {

@@ -7,12 +7,16 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/yuxiangchang/docker-image-optimiser/internal/rewrite"
+	"github.com/yuxiangchang/docker-image-optimiser/internal/rules"
 )
 
 // newFixCmd implements `dio fix <Dockerfile>`: rewrite safe issues in place and
 // annotate the rest. By default it prints to stdout; -w writes back to the file.
 func newFixCmd() *cobra.Command {
-	var write bool
+	var (
+		write        bool
+		conservative bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "fix [Dockerfile]",
@@ -29,7 +33,7 @@ func newFixCmd() *cobra.Command {
 				return err
 			}
 
-			res, err := rewrite.Apply(src)
+			res, err := rewrite.Apply(src, rules.Options{Conservative: conservative})
 			if err != nil {
 				return fmt.Errorf("rewriting %s: %w", path, err)
 			}
@@ -61,5 +65,6 @@ func newFixCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVarP(&write, "write", "w", false, "write changes back to the file in place")
+	cmd.Flags().BoolVar(&conservative, "conservative", false, "use --no-cache-dir style cleanup instead of BuildKit cache mounts")
 	return cmd
 }
