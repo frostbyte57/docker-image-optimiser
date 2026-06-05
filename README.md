@@ -5,29 +5,125 @@ detecting Dockerfile anti-patterns, fixing them, and proving the win. It is
 language-agnostic: Node, Python, Go, Rust, Java (Maven/Gradle), Ruby, PHP, .NET,
 and the apt/apk/dnf system package managers are all understood.
 
-## Status
+## Commands at a glance
 
-| Command | What it does | State |
-|---------|--------------|-------|
-| `dio lint`    | Parse a Dockerfile and report size / build-speed issues | ✅ working |
-| `dio fix`     | Rewrite safe issues in place, annotate the rest         | ✅ working |
-| `dio bench`   | Build before/after and compare size + (warm) build time | ✅ working |
-| `dio inspect` | Show per-layer sizes for an image, largest first        | ✅ working |
+| Command | What it does | Needs Docker |
+|---------|--------------|--------------|
+| `dio lint`    | Parse a Dockerfile and report size / build-speed issues | no  |
+| `dio fix`     | Rewrite safe issues, annotate the rest                  | no  |
+| `dio bench`   | Build before/after and compare size + (warm) build time | yes |
+| `dio inspect` | Show per-layer sizes for an image, largest first        | yes |
 
-## Quick start
+## Requirements
+
+- **Go 1.24+** to build or run the CLI.
+- **Docker** (with BuildKit, the default on modern Docker) only for `bench` and
+  `inspect`, which shell out to the `docker` binary. `lint` and `fix` are pure
+  Go and need nothing else.
+
+## Installation
+
+Pick whichever fits your workflow.
 
 ```bash
-go run ./cmd/dio lint testdata/go/Dockerfile      # report issues
-go run ./cmd/dio fix  testdata/node/Dockerfile    # print a fixed Dockerfile
-go run ./cmd/dio fix -w Dockerfile                # rewrite in place
-go run ./cmd/dio fix --conservative Dockerfile    # no-cache-dir form (no BuildKit)
-go run ./cmd/dio bench --incremental Dockerfile   # size + cold + warm rebuild (needs Docker)
-go run ./cmd/dio inspect myimage:latest           # per-layer size breakdown (needs Docker)
-# or build a binary:
-go build -o dio ./cmd/dio && ./dio lint Dockerfile
+# 1. Install the binary onto your PATH (uses $GOBIN, or $GOPATH/bin):
+go install github.com/yuxiangchang/docker-image-optimiser/cmd/dio@latest
+dio lint Dockerfile
+
+# 2. Build a local binary from a clone of this repo:
+git clone https://github.com/yuxiangchang/docker-image-optimiser
+cd docker-image-optimiser
+go build -o dio ./cmd/dio
+./dio lint Dockerfile
+
+# 3. Run straight from source without building (handy while hacking on dio):
+go run ./cmd/dio lint Dockerfile
 ```
 
-`lint` exits non-zero when it finds issues, so it can gate a CI pipeline.
+The examples below use `dio`; if you went with option 3, replace it with
+`go run ./cmd/dio`.
+
+## Usage
+
+Every command takes an optional Dockerfile path and defaults to `./Dockerfile`:
+
+```bash
+dio lint                       # lints ./Dockerfile
+dio lint path/to/Dockerfile    # lints a specific file
+```
+
+### `dio lint [Dockerfile]`
+
+Parses the Dockerfile, runs every rule, and prints what it found. It **exits
+non-zero when there are findings**, so you can drop it straight into a CI step to
+fail a build on regressions.
+
+```bash
+dio lint testdata/go/Dockerfile     # report issues in a sample file
+dio lint                            # lint ./Dockerfile
+dio lint -c ./app Dockerfile        # also run the .dockerignore check (DIO009)
+```
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `-c`, `--context <dir>` | `.` | Build context directory. Enables the `.dockerignore` check (DIO009), which needs the filesystem. |
+
+### `dio fix [Dockerfile]`
+
+Applies the safe fixes and leaves a `# dio[...]` comment above the issues that
+need a human decision (see the rules table below). By **default it prints the
+result to stdout** and writes its change log to stderr, so stdout stays a clean
+Dockerfile you can pipe or redirect:
+
+```bash
+dio fix Dockerfile                  # print the fixed Dockerfile to stdout
+dio fix Dockerfile > Dockerfile.new # redirect the clean output, ignore the log
+dio fix -w Dockerfile               # rewrite the file in place
+dio fix --conservative -w Dockerfile # use --no-cache-dir cleanup, no BuildKit
+```
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `-w`, `--write` | off | Write changes back to the file instead of printing to stdout. |
+| `--conservative` | off | Use `--no-cache-dir`-style cleanup instead of BuildKit cache mounts, for environments without BuildKit. |
+
+Re-running `fix` is idempotent: a second pass over an already-fixed file changes
+nothing and re-stacks no annotations.
+
+### `dio bench [Dockerfile]`
+
+Builds the original Dockerfile and the `dio fix` rewrite, then prints a size and
+build-time comparison. Requires a reachable Docker daemon. By default both builds
+use `--no-cache` for a fair comparison, and the two temporary images are removed
+afterwards.
+
+```bash
+dio bench Dockerfile                # compare size + cold build time
+dio bench --incremental Dockerfile  # also measure the warm rebuild (builds twice)
+dio bench -c ./app --keep Dockerfile # custom context, keep the built images
+```
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `-c`, `--context <dir>` | `.` | Build context directory. |
+| `--incremental` | off | Also measure the warm rebuild after a simulated source change (see below). |
+| `--cache` | off | Allow the build cache. By default `bench` builds with `--no-cache`. |
+| `--keep` | off | Keep the `dio-bench-before`/`dio-bench-after` images instead of removing them. |
+
+### `dio inspect <image>`
+
+Shows where an existing image's bytes went, layer by layer, largest first, by
+reading `docker history`. Requires Docker and an image that is already built or
+pulled. The image reference is **required**.
+
+```bash
+dio inspect myimage:latest          # full per-layer breakdown
+dio inspect -n 10 myimage:latest    # only the 10 largest layers, rest summarised
+```
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `-n`, `--top <N>` | `0` | Show only the N largest layers (0 = all). The remaining layers are collapsed into one summary line. |
 
 ## The three kinds of "caching" (why this tool exists)
 
@@ -59,7 +155,7 @@ everywhere (for environments without BuildKit). Re-running `fix` is idempotent.
 | ID | Checks for | Fix |
 |----|------------|-----|
 | DIO001 | broad `COPY . .` before a language dependency install | annotate (reorder) |
-| DIO002 | `apt-get install` without `--no-install-recommends` | auto |
+| DIO002 | `apt-get install` / `apt install` without `--no-install-recommends` | auto |
 | DIO003 | system install (apt/apk/dnf) leaving its cache in the image | auto |
 | DIO004 | language install with no cache mount (or `--no-cache-dir` in conservative mode) | auto |
 | DIO005 | base image pinned to `:latest` / no tag | annotate |
