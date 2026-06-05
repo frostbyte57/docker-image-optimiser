@@ -45,16 +45,29 @@ func imageRef(args string) (image, alias string) {
 }
 
 // baseName returns the image name without registry path, tag, or digest:
-// "docker.io/library/python:3.12-slim" -> "python".
+// "docker.io/library/python:3.12-slim" -> "python". A registry host may carry a
+// port ("myreg:5000/python:3.12"), so the tag-stripping colon is only the one
+// that follows the last slash; a colon before it belongs to the host.
 func baseName(ref string) string {
 	name := ref
-	if i := strings.IndexAny(name, "@:"); i >= 0 {
+	if i := strings.Index(name, "@"); i >= 0 { // strip digest
 		name = name[:i]
 	}
-	if i := strings.LastIndex(name, "/"); i >= 0 {
+	slash := strings.LastIndex(name, "/")
+	if colon := strings.LastIndex(name, ":"); colon > slash { // strip tag
+		name = name[:colon]
+	}
+	if i := strings.LastIndex(name, "/"); i >= 0 { // strip registry/path
 		name = name[i+1:]
 	}
 	return name
+}
+
+// isExecForm reports whether a RUN uses JSON exec form (`RUN ["a", "b"]`). The
+// shell-form rewrites — injecting cache-mount flags or a --no-cache-dir flag —
+// assume a shell command line and would corrupt exec form, so those rules skip it.
+func isExecForm(args string) bool {
+	return strings.HasPrefix(strings.TrimSpace(args), "[")
 }
 
 // hasCopyFromStage reports whether any instruction copies artifacts from another

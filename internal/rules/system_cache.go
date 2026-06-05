@@ -18,7 +18,7 @@ func (systemCacheClean) ID() string { return "DIO003" }
 func (r systemCacheClean) Check(ins []parser.Instruction, _ Options) []Finding {
 	var findings []Finding
 	for _, in := range ins {
-		if in.Cmd != "RUN" {
+		if in.Cmd != "RUN" || isExecForm(in.Args) {
 			continue
 		}
 		eco, ok := ecosystem.ForCommand(in.Args)
@@ -32,7 +32,7 @@ func (r systemCacheClean) Check(ins []parser.Instruction, _ Options) []Finding {
 				continue
 			}
 			flag := eco.CacheFlag
-			verb := eco.Detect[0] // e.g. "apk add"
+			verb := eco.Matched(in.Args) // the exact verb written, e.g. "apk add"
 			findings = append(findings, Finding{
 				Rule:     r.ID(),
 				Severity: Warning,

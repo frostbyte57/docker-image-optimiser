@@ -68,6 +68,18 @@ func TestRulesFireAcrossEcosystems(t *testing.T) {
 			df:     "FROM python:3.12-alpine\nRUN apk add curl\nRUN pip install flask\n",
 			expect: []string{"DIO003", "DIO004", "DIO010"},
 		},
+		{
+			name: "apt (not apt-get)",
+			df:   "FROM debian:12-slim\nRUN apt update && apt install -y curl\n",
+			// DIO002 must fire for `apt install`, matching the ecosystem and DIO003.
+			expect: []string{"DIO002", "DIO003"},
+		},
+		{
+			name: "registry with port",
+			df:   "FROM myreg:5000/python:3.12\nRUN echo hi\n",
+			// baseName must drop the :5000 host port so the python fat-base rule fires.
+			expect: []string{"DIO006"},
+		},
 	}
 
 	for _, tc := range cases {

@@ -3,6 +3,7 @@ package inspect
 import (
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func TestReport(t *testing.T) {
@@ -36,6 +37,27 @@ func TestParseSize(t *testing.T) {
 		if got := parseSize(in); got != want {
 			t.Errorf("parseSize(%q) = %d, want %d", in, got, want)
 		}
+	}
+}
+
+// truncate must cut on a rune boundary so a multibyte command never becomes
+// invalid UTF-8 in the report.
+func TestTruncate(t *testing.T) {
+	// Short strings pass through untouched.
+	if got := truncate("abc", 5); got != "abc" {
+		t.Errorf("truncate(\"abc\", 5) = %q, want \"abc\"", got)
+	}
+	// 5 multibyte runes truncated to 3 → 2 runes kept + the ellipsis, still valid.
+	long := "αβγδε"
+	got := truncate(long, 3)
+	if !utf8.ValidString(got) {
+		t.Errorf("truncate produced invalid UTF-8: %q", got)
+	}
+	if n := utf8.RuneCountInString(got); n != 3 {
+		t.Errorf("truncate(%q, 3) = %q (%d runes), want 3", long, got, n)
+	}
+	if !strings.HasSuffix(got, "…") {
+		t.Errorf("truncate(%q, 3) = %q, want a trailing ellipsis", long, got)
 	}
 }
 

@@ -35,6 +35,26 @@ func TestForCommand(t *testing.T) {
 	}
 }
 
+// Matched must return the exact verb the user wrote, not the registry's first
+// alias — otherwise verb-targeted rewrites (e.g. adding --no-cache-dir) silently
+// no-op on aliases like "pip3 install".
+func TestMatched(t *testing.T) {
+	pip, ok := ForCommand("pip3 install flask")
+	if !ok {
+		t.Fatal("expected pip3 to match the pip ecosystem")
+	}
+	cases := map[string]string{
+		"pip3 install flask":              "pip3 install",
+		"pip install -r requirements.txt": "pip install",
+		"npm ci":                          "", // different ecosystem, no match
+	}
+	for args, want := range cases {
+		if got := pip.Matched(args); got != want {
+			t.Errorf("pip.Matched(%q) = %q, want %q", args, got, want)
+		}
+	}
+}
+
 func TestForCommandNoMatch(t *testing.T) {
 	if _, ok := ForCommand("echo hello"); ok {
 		t.Error("expected no ecosystem match for a plain echo")

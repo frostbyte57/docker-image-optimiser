@@ -19,7 +19,7 @@ func (packageCache) ID() string { return "DIO004" }
 func (r packageCache) Check(ins []parser.Instruction, opts Options) []Finding {
 	var findings []Finding
 	for _, in := range ins {
-		if in.Cmd != "RUN" {
+		if in.Cmd != "RUN" || isExecForm(in.Args) {
 			continue
 		}
 		eco, ok := ecosystem.ForCommand(in.Args)
@@ -63,7 +63,7 @@ func conservativeFix(id string, in parser.Instruction, eco ecosystem.Ecosystem) 
 	if strings.Contains(in.Args, eco.CacheFlag) {
 		return Finding{}, false
 	}
-	verb := eco.Detect[0] // e.g. "pip install"
+	verb := eco.Matched(in.Args) // the exact verb written, e.g. "pip3 install"
 	flag := eco.CacheFlag
 	return Finding{
 		Rule:     id,

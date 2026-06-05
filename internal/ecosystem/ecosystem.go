@@ -152,13 +152,24 @@ var registry = []Ecosystem{
 // "npm install".
 func ForCommand(runArgs string) (Ecosystem, bool) {
 	for _, e := range registry {
-		for _, d := range e.Detect {
-			if containsWord(runArgs, d) {
-				return e, true
-			}
+		if e.Matched(runArgs) != "" {
+			return e, true
 		}
 	}
 	return Ecosystem{}, false
+}
+
+// Matched returns the first of e's Detect phrases that appears in runArgs (with a
+// left word boundary), or "" if none do. Rewrites use this to target the exact
+// verb the user wrote — e.g. "pip3 install" rather than the registry's canonical
+// "pip install" — so the edit is never a silent no-op.
+func (e Ecosystem) Matched(runArgs string) string {
+	for _, d := range e.Detect {
+		if containsWord(runArgs, d) {
+			return d
+		}
+	}
+	return ""
 }
 
 // containsWord reports whether phrase occurs in s preceded by the start of the

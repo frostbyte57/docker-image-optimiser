@@ -60,9 +60,14 @@ func Apply(src []byte, opts rules.Options) (Result, error) {
 			fixedRaw[f.Line] = f.Rewrite(raw)
 			res.Applied = append(res.Applied, summary(f))
 		case f.Line == 0:
-			// File-level finding (e.g. missing syntax directive / .dockerignore);
-			// handled out of band below or surfaced as a note.
-			res.Manual = append(res.Manual, summary(f))
+			// File-level finding. DIO008 (missing syntax directive) is auto-applied
+			// by ensureSyntaxDirective below, so report it as a fix; others (e.g. a
+			// missing .dockerignore) genuinely need a human.
+			if f.Rule == "DIO008" {
+				res.Applied = append(res.Applied, summary(f))
+			} else {
+				res.Manual = append(res.Manual, summary(f))
+			}
 		default:
 			note := "# dio[" + f.Rule + "]: " + f.Fix
 			if alreadyAnnotated(lines, f.Line, note) {
