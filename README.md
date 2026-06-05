@@ -76,14 +76,22 @@ the **annotate**/**inform** issues that need a human decision.
 
 Cold builds measure **size**; the `--incremental` flag also measures the
 **warm rebuild** — build once, change a source file, rebuild — which is where
-layer ordering and cache mounts actually pay off:
+cache mounts and layer ordering pay off:
 
 ```
                  before        after         change
   size         900 MB       120 MB       -780 MB (-86.7%)
   cold            58s          55s        -3s
-  warm            55s           3s        -52s          <- the real win
+  warm            55s          12s        -43s          <- the rebuild win
 ```
+
+`bench` builds the output of `dio fix`, which adds cache mounts but only
+**annotates** the layer reorder (DIO001 is a structural change left to you). So
+the warm number above is what cache mounts alone buy: the dependency step still
+re-runs on a source change, but its downloads come from the mount instead of the
+network. Apply the DIO001 reorder by hand — copy the manifest, install, then
+`COPY . .` — and the install layer is skipped entirely, taking the warm rebuild
+down to a few seconds.
 
 ## Project layout
 
