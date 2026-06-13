@@ -27,6 +27,7 @@ Every command takes an optional Dockerfile path and defaults to `./Dockerfile`.
 ```bash
 dio lint [Dockerfile]      # report size / build-speed issues
 dio fix  [Dockerfile]      # rewrite safe issues, annotate the rest
+dio optimize [Dockerfile]  # CI-friendly optimise/check workflow
 dio bench [Dockerfile]     # build before/after and compare (needs Docker)
 dio inspect <image>        # per-layer size breakdown of an image (needs Docker)
 ```
@@ -49,6 +50,19 @@ in place with `-w`. Running it twice changes nothing.
 dio fix Dockerfile                     # print the result
 dio fix -w Dockerfile                  # rewrite the file in place
 dio fix --conservative -w Dockerfile   # --no-cache-dir cleanup instead of BuildKit cache mounts
+```
+
+### optimize
+
+Runs the linter and safe rewriter in one CI-oriented command. Use `--check` to
+fail a pipeline when a Dockerfile still has automatic optimisations or manual
+actions pending, or `--write` to update it in place.
+
+```bash
+dio optimize Dockerfile
+dio optimize --check Dockerfile
+dio optimize --check --format json Dockerfile
+dio optimise -w Dockerfile             # British spelling alias
 ```
 
 ### bench

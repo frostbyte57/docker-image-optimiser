@@ -10,11 +10,13 @@ func NewRootCmd() *cobra.Command {
 		Short: "dio optimises Dockerfiles for smaller images and faster builds",
 		Long: "docker-image-optimiser (dio) lints Dockerfiles for size and build-speed\n" +
 			"anti-patterns, rewrites them with fixes, and measures the result.",
-		SilenceUsage: true,
+		SilenceErrors: true,
+		SilenceUsage:  true,
 	}
 	root.AddCommand(
 		newLintCmd(),
 		newFixCmd(),
+		newOptimizeCmd(),
 		newBenchCmd(),
 		newInspectCmd(),
 	)
