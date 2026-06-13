@@ -8,7 +8,6 @@ package rewrite
 
 import (
 	"bytes"
-	"strconv"
 	"strings"
 
 	"github.com/yuxiangchang/docker-image-optimiser/internal/parser"
@@ -22,8 +21,6 @@ type Result struct {
 	Manual  []string // issues annotated for manual attention
 	Changed bool
 }
-
-const syntaxDirective = "# syntax=docker/dockerfile:1"
 
 // Apply rewrites src and returns the result. opts is threaded to the rules
 // (e.g. opts.Conservative selects --no-cache-dir-style fixes over cache mounts).
@@ -101,33 +98,4 @@ func Apply(src []byte, opts rules.Options) (Result, error) {
 	res.Content = content
 	res.Changed = res.Content != string(src)
 	return res, nil
-}
-
-// ensureSyntaxDirective prepends the BuildKit syntax directive when the file
-// uses cache mounts but lacks it, so injected mounts work on older Docker.
-func ensureSyntaxDirective(content string) string {
-	if !strings.Contains(content, "--mount=type=cache") || rules.HasSyntaxDirective(content) {
-		return content
-	}
-	return syntaxDirective + "\n" + content
-}
-
-// alreadyAnnotated reports whether the given annotation already appears in the
-// contiguous block of `# dio[...]` comments directly above startLine, so repeated
-// `dio fix` runs don't stack duplicates (one instruction may carry several).
-func alreadyAnnotated(lines []string, startLine int, note string) bool {
-	for i := startLine - 2; i >= 0 && i < len(lines); i-- { // 0-based, walking up
-		t := strings.TrimSpace(lines[i])
-		if t == note {
-			return true
-		}
-		if !strings.HasPrefix(t, "# dio[") {
-			break // stop at the first non-annotation line
-		}
-	}
-	return false
-}
-
-func summary(f rules.Finding) string {
-	return "line " + strconv.Itoa(f.Line) + " [" + f.Rule + "] " + f.Message
 }

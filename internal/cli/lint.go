@@ -1,13 +1,12 @@
 package cli
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 
-	"github.com/yuxiangchang/docker-image-optimiser/internal/parser"
+	"github.com/yuxiangchang/docker-image-optimiser/internal/analyze"
 	"github.com/yuxiangchang/docker-image-optimiser/internal/report"
 	"github.com/yuxiangchang/docker-image-optimiser/internal/rules"
 )
@@ -31,15 +30,14 @@ func newLintCmd() *cobra.Command {
 				return err
 			}
 
-			ins, err := parser.Parse(bytes.NewReader(src))
+			findings, err := analyze.Dockerfile(src, rules.Options{
+				ContextDir: contextDir,
+				Source:     string(src),
+			})
 			if err != nil {
 				return fmt.Errorf("parsing %s: %w", path, err)
 			}
 
-			findings := rules.Run(ins, rules.Options{
-				ContextDir: contextDir,
-				Source:     string(src),
-			})
 			n := report.Text(cmd.OutOrStdout(), path, findings)
 
 			// Non-zero exit on findings, so CI can gate on it.

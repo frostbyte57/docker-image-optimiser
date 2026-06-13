@@ -1,28 +1,15 @@
 package cli
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/spf13/cobra"
 
-	"github.com/yuxiangchang/docker-image-optimiser/internal/parser"
+	"github.com/yuxiangchang/docker-image-optimiser/internal/analyze"
 	"github.com/yuxiangchang/docker-image-optimiser/internal/rewrite"
 	"github.com/yuxiangchang/docker-image-optimiser/internal/rules"
 )
-
-type optimizeOutput struct {
-	Path         string          `json:"path"`
-	Changed      bool            `json:"changed"`
-	IssueCount   int             `json:"issue_count"`
-	AutoFixCount int             `json:"auto_fix_count"`
-	ManualCount  int             `json:"manual_count"`
-	Applied      []string        `json:"applied"`
-	Manual       []string        `json:"manual"`
-	Findings     []findingOutput `json:"findings"`
-}
 
 // newOptimizeCmd implements the CI-friendly optimizer workflow: evaluate a
 // Dockerfile, apply safe rewrites, and optionally enforce that no changes are
@@ -64,7 +51,7 @@ func newOptimizeCmd() *cobra.Command {
 				ContextDir:   contextDir,
 				Source:       string(src),
 			}
-			findings, err := lintSource(src, opts)
+			findings, err := analyze.Dockerfile(src, opts)
 			if err != nil {
 				return fmt.Errorf("parsing %s: %w", path, err)
 			}
@@ -112,37 +99,4 @@ func newOptimizeCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&contextDir, "context", "c", ".", "build context dir (enables the .dockerignore check)")
 	cmd.Flags().StringVar(&format, "format", outputText, "output format: text or json")
 	return cmd
-}
-
-func lintSource(src []byte, opts rules.Options) ([]rules.Finding, error) {
-	ins, err := parser.Parse(bytes.NewReader(src))
-	if err != nil {
-		return nil, err
-	}
-	return rules.Run(ins, opts), nil
-}
-
-func writeOptimizeText(w io.Writer, out optimizeOutput, wrote bool) {
-	if out.IssueCount == 0 {
-		fmt.Fprintf(w, "%s: no issues found\n", out.Path)
-		return
-	}
-
-	fmt.Fprintf(w, "%s: %d issue(s), %d auto-fix(es), %d manual action(s)\n",
-		out.Path, out.IssueCount, out.AutoFixCount, out.ManualCount)
-	for _, a := range out.Applied {
-		fmt.Fprintln(w, "fixed:    "+a)
-	}
-	for _, m := range out.Manual {
-		fmt.Fprintln(w, "manual:   "+m)
-	}
-
-	switch {
-	case wrote && out.Changed:
-		fmt.Fprintf(w, "%s: wrote optimised Dockerfile\n", out.Path)
-	case out.Changed:
-		fmt.Fprintf(w, "%s: optimisations available; rerun with --write to update the file\n", out.Path)
-	default:
-		fmt.Fprintf(w, "%s: no automatic edits available; manual actions remain\n", out.Path)
-	}
 }

@@ -1,17 +1,6 @@
 package cli
 
-import (
-	"encoding/json"
-	"fmt"
-	"io"
-
-	"github.com/yuxiangchang/docker-image-optimiser/internal/rules"
-)
-
-const (
-	outputText = "text"
-	outputJSON = "json"
-)
+import "github.com/yuxiangchang/docker-image-optimiser/internal/rules"
 
 type findingOutput struct {
 	Rule     string         `json:"rule"`
@@ -19,15 +8,6 @@ type findingOutput struct {
 	Line     int            `json:"line"`
 	Message  string         `json:"message"`
 	Fix      string         `json:"fix"`
-}
-
-func validateOutputFormat(format string) error {
-	switch format {
-	case outputText, outputJSON:
-		return nil
-	default:
-		return fmt.Errorf("unsupported output format %q (expected text or json)", format)
-	}
 }
 
 func findingOutputs(findings []rules.Finding) []findingOutput {
@@ -42,10 +22,4 @@ func findingOutputs(findings []rules.Finding) []findingOutput {
 		})
 	}
 	return out
-}
-
-func writeJSON(w io.Writer, v any) error {
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(v)
 }
