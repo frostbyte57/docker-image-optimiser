@@ -19,7 +19,7 @@ func (packageCache) ID() string { return "DIO004" }
 func (r packageCache) Check(ins []parser.Instruction, opts Options) []Finding {
 	var findings []Finding
 	for _, in := range ins {
-		if in.Cmd != "RUN" || isExecForm(in.Args) {
+		if !isShellRewritableRun(in) {
 			continue
 		}
 		eco, ok := ecosystem.ForCommand(in.Args)

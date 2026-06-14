@@ -18,7 +18,7 @@ func (systemCacheClean) ID() string { return "DIO003" }
 func (r systemCacheClean) Check(ins []parser.Instruction, _ Options) []Finding {
 	var findings []Finding
 	for _, in := range ins {
-		if in.Cmd != "RUN" || isExecForm(in.Args) {
+		if !isShellRewritableRun(in) {
 			continue
 		}
 		eco, ok := ecosystem.ForCommand(in.Args)

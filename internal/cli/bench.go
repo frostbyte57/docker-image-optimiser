@@ -57,7 +57,9 @@ func newBenchCmd() *cobra.Command {
 			if _, err := fixed.WriteString(res.Content); err != nil {
 				return err
 			}
-			fixed.Close()
+			if err := fixed.Close(); err != nil {
+				return err
+			}
 
 			const beforeTag, afterTag = "dio-bench-before:latest", "dio-bench-after:latest"
 			if !keep {

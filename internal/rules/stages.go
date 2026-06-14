@@ -70,6 +70,10 @@ func isExecForm(args string) bool {
 	return strings.HasPrefix(strings.TrimSpace(args), "[")
 }
 
+func isShellRewritableRun(in parser.Instruction) bool {
+	return in.Cmd == "RUN" && !isExecForm(in.Args) && !in.HasHeredoc
+}
+
 // hasCopyFromStage reports whether any instruction copies artifacts from another
 // build stage, i.e. the Dockerfile already uses a multi-stage pattern.
 func hasCopyFromStage(ins []parser.Instruction) bool {

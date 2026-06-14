@@ -16,7 +16,7 @@ func (aptNoRecommends) ID() string { return "DIO002" }
 func (r aptNoRecommends) Check(ins []parser.Instruction, _ Options) []Finding {
 	var findings []Finding
 	for _, in := range ins {
-		if in.Cmd != "RUN" || isExecForm(in.Args) {
+		if !isShellRewritableRun(in) {
 			continue
 		}
 		verb := aptInstallVerb(in.Args) // "apt-get install" or "apt install"
