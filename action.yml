@@ -1,0 +1,52 @@
+name: "Docker Image Optimiser"
+description: "Gate your CI on optimised Dockerfiles. Fails the build if a Dockerfile has un-applied size/speed optimisations, with inline PR annotations."
+author: "yuxiangchang"
+branding:
+  icon: "package"
+  color: "blue"
+
+inputs:
+  dockerfile:
+    description: "Path to the Dockerfile to check."
+    required: false
+    default: "Dockerfile"
+  context:
+    description: "Build context directory (enables the .dockerignore check)."
+    required: false
+    default: "."
+  conservative:
+    description: "Use --no-cache-dir style cleanup instead of BuildKit cache mounts."
+    required: false
+    default: "false"
+  version:
+    description: "dio version to install (a Git ref, e.g. v0.1.0 or latest)."
+    required: false
+    default: "latest"
+  fail-on-issues:
+    description: "Fail the job when optimisations or manual fixes are pending."
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: "stable"
+
+    - name: Install dio
+      shell: bash
+      run: go install github.com/yuxiangchang/docker-image-optimiser/cmd/dio@${{ inputs.version }}
+
+    - name: Run dio gate
+      shell: bash
+      run: |
+        args=(optimize --format github --context "${{ inputs.context }}")
+        if [ "${{ inputs.fail-on-issues }}" = "true" ]; then
+          args+=(--check)
+        fi
+        if [ "${{ inputs.conservative }}" = "true" ]; then
+          args+=(--conservative)
+        fi
+        dio "${args[@]}" "${{ inputs.dockerfile }}"

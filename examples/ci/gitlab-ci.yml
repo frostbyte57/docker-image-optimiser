@@ -1,0 +1,25 @@
+# Example: GitLab CI gate-then-build.
+#
+# The `dockerfile-gate` job must pass before `build-image` runs, so an
+# un-optimised Dockerfile stops the pipeline before the build stage.
+# Copy the relevant parts into your own .gitlab-ci.yml.
+
+stages:
+  - check
+  - build
+
+dockerfile-gate:
+  stage: check
+  image: golang:1.25
+  script:
+    - go install github.com/yuxiangchang/docker-image-optimiser/cmd/dio@latest
+    - dio optimize --check Dockerfile
+
+build-image:
+  stage: build
+  needs: ["dockerfile-gate"] # only build once the gate passes
+  image: docker:27
+  services:
+    - docker:27-dind
+  script:
+    - docker build -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHA" .

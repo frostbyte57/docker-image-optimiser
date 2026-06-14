@@ -82,6 +82,32 @@ USER nobody
 	}
 }
 
+func TestLintGitHubFormatEmitsAnnotations(t *testing.T) {
+	dir := t.TempDir()
+	writeDockerignore(t, dir)
+	path := writeDockerfile(t, dir, `FROM node:20
+COPY . .
+RUN npm ci
+`)
+
+	var stdout, stderr bytes.Buffer
+	cmd := NewRootCmd()
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&stderr)
+	cmd.SetArgs([]string{"lint", "--format", "github", "--context", dir, path})
+
+	if err := cmd.Execute(); !errors.Is(err, ErrFindings) {
+		t.Fatalf("expected ErrFindings, got %v", err)
+	}
+	out := stdout.String()
+	if !strings.Contains(out, "::warning file="+path) {
+		t.Fatalf("expected GitHub warning annotation, got:\n%s", out)
+	}
+	if !strings.Contains(out, "title=dio DIO001") {
+		t.Fatalf("expected rule id in annotation title, got:\n%s", out)
+	}
+}
+
 func TestOptimiseAlias(t *testing.T) {
 	dir := t.TempDir()
 	writeDockerignore(t, dir)

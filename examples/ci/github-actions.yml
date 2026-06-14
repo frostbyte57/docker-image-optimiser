@@ -1,0 +1,47 @@
+# Example: gate the image build on an optimised Dockerfile.
+#
+# The `dio` job must pass before `build` runs, so an un-optimised Dockerfile
+# fails the pipeline *before* any (slow, expensive) image build happens.
+# Copy this into .github/workflows/ in your own repo.
+
+name: Docker
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dio:
+    name: Dockerfile optimisation gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Using the published action (recommended):
+      - uses: yuxiangchang/docker-image-optimiser@v1
+        with:
+          dockerfile: Dockerfile
+          context: .
+
+      # ...or call the CLI directly:
+      # - uses: actions/setup-go@v5
+      #   with: { go-version: stable }
+      # - run: go install github.com/yuxiangchang/docker-image-optimiser/cmd/dio@latest
+      # - run: dio optimize --check --format github Dockerfile
+
+  build:
+    name: Build image
+    needs: dio # only build once the Dockerfile is optimised
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: myapp:${{ github.sha }}

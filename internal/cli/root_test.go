@@ -25,7 +25,7 @@ func TestRootHelpListsCommandsAndExamples(t *testing.T) {
 		"dio optimize",
 		"dio bench",
 		"dio inspect",
-		"dio optimize --check --format json Dockerfile",
+		"dio optimize --check --format github Dockerfile",
 		"Available Commands:",
 	} {
 		if !strings.Contains(help, want) {

@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/yuxiangchang/docker-image-optimiser/internal/analyze"
+	"github.com/yuxiangchang/docker-image-optimiser/internal/report"
 	"github.com/yuxiangchang/docker-image-optimiser/internal/rewrite"
 	"github.com/yuxiangchang/docker-image-optimiser/internal/rules"
 )
@@ -82,6 +83,8 @@ func newOptimizeCmd() *cobra.Command {
 				if err := writeJSON(cmd.OutOrStdout(), summary); err != nil {
 					return err
 				}
+			case outputGitHub:
+				report.GitHub(cmd.OutOrStdout(), path, findings)
 			default:
 				writeOptimizeText(cmd.OutOrStdout(), summary, write)
 			}
@@ -97,6 +100,6 @@ func newOptimizeCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&check, "check", false, "exit non-zero when optimisations or manual fixes are pending")
 	cmd.Flags().BoolVar(&conservative, "conservative", false, "use --no-cache-dir style cleanup instead of BuildKit cache mounts")
 	cmd.Flags().StringVarP(&contextDir, "context", "c", ".", "build context dir (enables the .dockerignore check)")
-	cmd.Flags().StringVar(&format, "format", outputText, "output format: text or json")
+	cmd.Flags().StringVar(&format, "format", outputText, "output format: text, json, or github (CI annotations)")
 	return cmd
 }
