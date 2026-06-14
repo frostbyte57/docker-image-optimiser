@@ -23,6 +23,50 @@ go build -o dio ./cmd/dio
 For command help, see [docs/help/README.md](docs/help/README.md) or run
 `dio --help`.
 
+## Use in CI
+
+`dio` is built to be a **pipeline gate**: run the check first, and only build the
+image once the Dockerfile is optimised. `dio optimize --check` exits non-zero when
+any optimisation or manual fix is still pending, so it fails the job before the
+(slow, expensive) `docker build` runs.
+
+```bash
+dio optimize --check Dockerfile          # exit 1 if anything is pending
+dio optimize --check --format github ... # same, with inline PR annotations
+dio optimize --check --format json  ...  # machine-readable summary
+```
+
+### GitHub Actions
+
+Use the bundled composite action — it installs `dio`, runs the gate, and emits
+inline annotations on the pull request:
+
+```yaml
+jobs:
+  dio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: yuxiangchang/docker-image-optimiser@v1
+        with:
+          dockerfile: Dockerfile
+          context: .
+  build:
+    needs: dio          # only build once the Dockerfile is optimised
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/build-push-action@v6
+        with: { context: ., push: false, tags: myapp:${{ github.sha }} }
+```
+
+Action inputs: `dockerfile`, `context`, `conservative`, `version`,
+`fail-on-issues`. Full gate-then-build examples for GitHub Actions and GitLab CI
+live in [`examples/ci/`](examples/ci/).
+
+The `github` format maps severities to annotation levels (error/warning/notice)
+so findings appear directly on the changed lines in the PR.
+
 ## Development
 
 `dio` is a Go CLI built with Cobra. Dockerfile parsing is delegated to

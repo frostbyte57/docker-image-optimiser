@@ -17,6 +17,7 @@ Flags:
 
 ```bash
 -c, --context string   build context dir (default ".")
+    --format string    output format: text, json, or github (default "text")
 ```
 
 ### `dio fix [Dockerfile]`
@@ -46,7 +47,7 @@ Flags:
     --check            exit non-zero when optimisations or manual fixes are pending
     --conservative     use no-cache cleanup instead of BuildKit cache mounts
 -c, --context string   build context dir (default ".")
-    --format string    output format: text or json (default "text")
+    --format string    output format: text, json, or github (default "text")
 -w, --write            write optimised Dockerfile back in place
 ```
 

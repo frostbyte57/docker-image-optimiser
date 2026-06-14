@@ -14,6 +14,6 @@ Available workflows:
 const rootExamples = `  dio --help
   dio lint Dockerfile
   dio fix --write Dockerfile
-  dio optimize --check --format json Dockerfile
+  dio optimize --check --format github Dockerfile
   dio bench --incremental Dockerfile
   dio inspect myimage:latest --top 10`
